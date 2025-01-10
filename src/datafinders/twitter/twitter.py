@@ -1,11 +1,7 @@
-from enum import IntEnum
-
 import twint
 import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-
-from pydantic import BaseModel
 
 from openai import OpenAI
 
@@ -13,7 +9,7 @@ import concurrent.futures
 
 from src.datafinders.models import Sentiment
 from src.datafinders.terms import CRYPTO_TERMS
-from src.datafinders.constants import LIKE_THRESHOLD, RETWEET_THRESHOLD, REPLY_THRESHOLD
+
 """
 tweet data frame structure:
 _data = {
