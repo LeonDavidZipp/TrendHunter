@@ -66,17 +66,18 @@ class TwitterSentimentFinder:
         self.reply_threshold = reply_threshold
         self.client = OpenAI()
 
-    def _get_user_tweets(self,user_id: int) -> pd.DataFrame:
+    def _get_user_tweets(self, user_id: int, since: int) -> pd.DataFrame:
         """
         Get tweets from Twitter for a specific user
         :param user_id: Twitter username
+        :param since: Number of months to look back
         :return: pandas DataFrame containing tweets
         """
 
         # Configure twint
         c = twint.Config()
         c.User_id = user_id
-        c.Since = (datetime.now() - relativedelta(months=2)).strftime("%Y-%m-%d")
+        c.Since = (datetime.now() - relativedelta(months=since)).strftime("%Y-%m-%d")
         c.Limit = 100
         c.Search = "|".join(CRYPTO_TERMS)
         c.Pandas = True
@@ -98,7 +99,7 @@ class TwitterSentimentFinder:
 
         return df
 
-    def _get_users_tweets(self, user_ids: list[int]) -> pd.DataFrame:
+    def _get_users_tweets(self, user_ids: list[int], since: int) -> pd.DataFrame:
         """
         Get tweets from Twitter for a list of users
         :param user_ids: List of Twitter usernames
@@ -107,7 +108,7 @@ class TwitterSentimentFinder:
         # [...]
 
         # Get tweets for each user
-        dfs = [self._get_user_tweets(user_id) for user_id in user_ids]
+        dfs = [self._get_user_tweets(user_id, since) for user_id in user_ids]
 
         return pd.concat(dfs, sort=True, ignore_index=True, copy=False)
 
@@ -117,7 +118,7 @@ class TwitterSentimentFinder:
                 model="gpt-4o-2024-08-06",
                 messages=[
                     {"role": "system",
-                     "content": "Extract the information & buying sentiment regarding a token if given."},
+                     "content": "Extract the information & buying sentiment for a token if given."},
                     {"role": "user",
                      "content": content},
                 ],
@@ -130,7 +131,7 @@ class TwitterSentimentFinder:
         except Exception:
             return Sentiment()
 
-    def get_sentiments(self, contents: list[str], users: list[str]) -> list[Sentiment]:
+    def _get_sentiments(self, contents: list[str], users: list[str]) -> list[Sentiment]:
         """
         Get sentiment analysis for tweets
         :param contents: List of tweet contents
@@ -143,14 +144,28 @@ class TwitterSentimentFinder:
 
         return sentiments
 
-    def run(self, user_ids: list[int]) -> list[Sentiment]:
+    def run(self, user_ids: list[int], since: int) -> list[Sentiment]:
         """
         Run the sentiment finder
         :param user_ids: List of Twitter user ids
+        :param since: Number of months to look back
         :return: list of TwitterSentiment objects
         """
 
-        tweets = self._get_users_tweets(user_ids)
-        sentiments = self.get_sentiments(tweets["tweet"].to_list(), tweets["username"].to_list())
+        tweets = self._get_users_tweets(user_ids, since)
+        sentiments = self._get_sentiments(tweets["tweet"].to_list(), tweets["username"].to_list())
+
+        return sentiments
+
+    def run_single(self, user_id: int, since: int) -> list[Sentiment]:
+        """
+        Run the sentiment finder for a single user
+        :param user_id: Twitter user id
+        :param since: Number of months to look back
+        :return: list of TwitterSentiment objects
+        """
+
+        tweets = self._get_user_tweets(user_id, since)
+        sentiments = self._get_sentiments(tweets["tweet"].to_list(), tweets["username"].to_list())
 
         return sentiments
