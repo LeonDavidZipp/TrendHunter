@@ -1,15 +1,17 @@
+from enum import IntEnum
+
 import twint
 import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from pydantic import BaseModel
-from typing import Literal
 
 from openai import OpenAI
 
 import concurrent.futures
 
+from src.datafinders.models import Sentiment
 from src.datafinders.terms import CRYPTO_TERMS
 from src.datafinders.constants import LIKE_THRESHOLD, RETWEET_THRESHOLD, REPLY_THRESHOLD
 """
@@ -56,50 +58,28 @@ _data = {
     }
 """
 
-class TwitterSentiment(BaseModel):
-    """
-    Twitter sentiment to buy a certain cryptocurrency
-    """
-    token: str = None
-    token_address: str = None
-    action: Literal["buy", "sell", "hold"] = None
-
 
 class TwitterSentimentFinder:
     """
     Class to find sentiment of tweets from Twitter
-
     """
-    def __init__(self):
-        self.client = OpenAI()
-        self.to_drop = [
-            "id",
-            "timezone",
-            "place",
-            "language",
-            "hour",
-            "thumbnail",
-            "quote_url",
-            "user_rt_id",
-            "user_rt",
-            "retweet_id",
-            "reply_to",
-            "retweet_date",
-            "translate",
-            "trans_src",
-            "trans_dest"
-        ]
 
-    def get_user_tweets(self, user: str) -> pd.DataFrame:
+    def __init__(self, like_threshold: int = 0, retweet_threshold: int = 0, reply_threshold: int = 0):
+        self.like_threshold = like_threshold
+        self.retweet_threshold = retweet_threshold
+        self.reply_threshold = reply_threshold
+        self.client = OpenAI()
+
+    def _get_user_tweets(self,user_id: int) -> pd.DataFrame:
         """
         Get tweets from Twitter for a specific user
-        :param user: Twitter username
+        :param user_id: Twitter username
         :return: pandas DataFrame containing tweets
         """
 
         # Configure twint
         c = twint.Config()
-        c.Username = user
+        c.User_id = user_id
         c.Since = (datetime.now() - relativedelta(months=2)).strftime("%Y-%m-%d")
         c.Limit = 100
         c.Search = "|".join(CRYPTO_TERMS)
@@ -108,57 +88,73 @@ class TwitterSentimentFinder:
         c.Store_object = True
         # [...]
 
-        # Run twint
+        # Run twint & get tweets df
         twint.run.Search(c)
-
-        # get dataframe
         df: pd.DataFrame = twint.storage.panda.Tweets_df
-        df.drop(columns=self.to_drop, inplace=True)
 
-        # Apply thresholds
+        # Apply thresholds & drop unnecessary columns
         df = df[
-            (df["nlikes"] > LIKE_THRESHOLD) & \
-            (df["nretweets"] > RETWEET_THRESHOLD) & \
-            (df["nreplies"] > REPLY_THRESHOLD)
+            (df["nlikes"] > self.like_threshold) & \
+            (df["nretweets"] > self.retweet_threshold) & \
+            (df["nreplies"] > self.reply_threshold)
             ]
+        df = df[["user_id", "username", "tweet"]]
 
         return df
 
-    def get_users_tweets(self, users: list[str]) -> pd.DataFrame:
+    def _get_users_tweets(self, user_ids: list[int]) -> pd.DataFrame:
         """
         Get tweets from Twitter for a list of users
-        :param users: List of Twitter usernames
+        :param user_ids: List of Twitter usernames
         :return: pandas DataFrame containing tweets
         """
         # [...]
 
         # Get tweets for each user
-        dfs = [self.get_user_tweets(user) for user in users]
+        dfs = [self._get_user_tweets(user_id) for user_id in user_ids]
 
         return pd.concat(dfs, sort=True, ignore_index=True, copy=False)
 
-    def get_sentiments(self, tweets: pd.DataFrame) -> list[TwitterSentiment]:
+    def _call_openai_for_sentiment(self, content: str, source: str) -> Sentiment:
+        try:
+            completion = self.client.beta.chat.completions.parse(
+                model="gpt-4o-2024-08-06",
+                messages=[
+                    {"role": "system",
+                     "content": "Extract the information & buying sentiment regarding a token if given."},
+                    {"role": "user",
+                     "content": content},
+                ],
+                response_format=Sentiment,
+            )
+            res: Sentiment = completion.choices[0].message.parsed
+            res.source = source
+
+            return res
+        except Exception:
+            return Sentiment()
+
+    def get_sentiments(self, contents: list[str], users: list[str]) -> list[Sentiment]:
         """
         Get sentiment analysis for tweets
-        :param tweets: pandas DataFrame containing tweets
+        :param contents: List of tweet contents
+        :param users: List of tweet authors
+        :return: list of Sentiment objects
+        """
+
+        with (concurrent.futures.ThreadPoolExecutor() as executor):
+            sentiments = list(executor.map(self._call_openai_for_sentiment, contents, users))
+
+        return sentiments
+
+    def run(self, user_ids: list[int]) -> list[Sentiment]:
+        """
+        Run the sentiment finder
+        :param user_ids: List of Twitter user ids
         :return: list of TwitterSentiment objects
         """
 
-        def extract_sentiment(entry: str) -> TwitterSentiment:
-            try:
-                completion = self.client.beta.chat.completions.parse(
-                    model="gpt-4o-2024-08-06",
-                    messages=[
-                        {"role": "system", "content": "Extract the information regarding a token if given."},
-                        {"role": "user", "content": entry},
-                    ],
-                    response_format=TwitterSentiment,
-                )
-                return completion.choices[0].message.parsed
-            except Exception:
-                return TwitterSentiment()
-
-        with (concurrent.futures.ThreadPoolExecutor() as executor):
-            sentiments = list(executor.map(extract_sentiment, tweets["tweet"].to_list()))
+        tweets = self._get_users_tweets(user_ids)
+        sentiments = self.get_sentiments(tweets["tweet"].to_list(), tweets["username"].to_list())
 
         return sentiments
