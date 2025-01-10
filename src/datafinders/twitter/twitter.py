@@ -113,13 +113,17 @@ class TwitterSentimentFinder:
 
         return pd.concat(dfs, sort=True, ignore_index=True, copy=False)
 
-    def _call_openai_for_sentiment(self, content: str, source: str) -> Sentiment:
+    def _call_openai_for_sentiment(self, content: str, source: str, date: datetime) -> Sentiment:
         try:
+            prompt: str = "You are an AI model specialized in extracting information and analyzing the buying" + \
+                          "sentiment for cryptocurrencies from text. Your task is to identify the token mentioned," + \
+                          "its address if available, and the sentiment expressed towards buying or selling" + \
+                          "the token. The sentiment should be classified as 'BUY' or 'SELL'."
             completion = self.client.beta.chat.completions.parse(
                 model="gpt-4o-2024-08-06",
                 messages=[
                     {"role": "system",
-                     "content": "Extract the information & buying sentiment for a token if given."},
+                     "content": prompt},
                     {"role": "user",
                      "content": content},
                 ],
@@ -127,12 +131,13 @@ class TwitterSentimentFinder:
             )
             res: Sentiment = completion.choices[0].message.parsed
             res.source = source
+            res.date = date
 
             return res
         except Exception:
             return Sentiment()
 
-    def _get_sentiments(self, contents: list[str], users: list[str]) -> list[Sentiment]:
+    def _get_sentiments(self, contents: list[str], users: list[str], dates: list[datetime]) -> list[Sentiment]:
         """
         Get sentiment analysis for tweets
         :param contents: List of tweet contents
@@ -141,7 +146,7 @@ class TwitterSentimentFinder:
         """
 
         with (concurrent.futures.ThreadPoolExecutor() as executor):
-            sentiments = list(executor.map(self._call_openai_for_sentiment, contents, users))
+            sentiments = list(executor.map(self._call_openai_for_sentiment, contents, users, dates))
 
         return sentiments
 
@@ -154,7 +159,11 @@ class TwitterSentimentFinder:
         """
 
         tweets = self._get_users_tweets(user_ids, since)
-        sentiments = self._get_sentiments(tweets["tweet"].to_list(), tweets["username"].to_list())
+        sentiments = self._get_sentiments(
+            tweets["tweet"].to_list(),
+            tweets["username"].to_list(),
+            tweets["created_at"].to_list()
+        )
 
         return sentiments
 
@@ -167,6 +176,10 @@ class TwitterSentimentFinder:
         """
 
         tweets = self._get_user_tweets(user_id, since)
-        sentiments = self._get_sentiments(tweets["tweet"].to_list(), tweets["username"].to_list())
+        sentiments = self._get_sentiments(
+            tweets["tweet"].to_list(),
+            tweets["username"].to_list(),
+            tweets["created_at"].to_list()
+        )
 
         return sentiments
