@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from src.models import Action
+from datetime import datetime
 
 
 class Sentiment(BaseModel):
@@ -11,3 +12,4 @@ class Sentiment(BaseModel):
     token: str = None
     token_address: str = None
     action: Action = None
+    date: datetime = None
