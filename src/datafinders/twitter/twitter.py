@@ -95,7 +95,8 @@ class TwitterSentimentFinder:
             (df["nretweets"] > self.retweet_threshold) & \
             (df["nreplies"] > self.reply_threshold)
             ]
-        df = df[["user_id", "username", "tweet"]]
+        df = df[["user_id", "username", "tweet", "created_at"]]
+        df.sort_values(by="created_at", ascending=True, inplace=True)
 
         return df
 
