@@ -3,6 +3,17 @@ from enum import IntEnum
 
 from src.models import Action
 
+class CheckedState(IntEnum):
+    """
+    State of an observation
+    """
+
+    # source has not been checked
+    UNCHECKED = 0
+    # source cannot be checked yet
+    CANNOT_CHECK_YET = 1
+    # source has been checked
+    CHECKED = 2
 
 class SourceType(IntEnum):
     """
@@ -21,6 +32,63 @@ class SourceType(IntEnum):
     FARCASTER = 9
     LENSTER = 10
     OTHER = 11
+
+class Observation:
+    """
+    Observation of a sentiment
+    """
+
+    def __init__(
+            self,
+            observed_at: datetime,
+            source_type: SourceType,
+            sentiment: Action,
+            token: str,
+            token_addr: str = None,
+            price: float = None
+    ):
+        """
+        :param observed_at: time of observation
+        :param source_type: name of the source
+        :param sentiment: sentiment observed
+        :param token: token the sentiment is about
+        :param token_addr: address of observed token; might not exist at time of observation
+        :param price: price of token at time of observation; might not exist at time of observation
+        """
+
+        # source type
+        self.source_type: SourceType = source_type
+        # sentiment observed at
+        self.observed_at: datetime = observed_at
+        # price at time of observation
+        self.price_at_observation_time: float = price
+        # the token the sentiment is about
+        self.token: str = token
+        # the address of the token the sentiment is about
+        self.token_addr: str = token_addr
+        # sentiment predicted by the source
+        self.predicted_sentiment: Action = sentiment
+        # whether sentiment has been checked
+        self.checked: CheckedState = CheckedState.UNCHECKED
+        # relative correctness score; 0.0 is incorrect, 1.0 is correct
+        self.correctness_score: float = 0.0
+
+    # checks the observation if it has not been checked
+    def verify(self):
+        if self.checked:
+            return
+
+        # check non-onchain and non-other sources
+        if self.source_type != SourceType.ONCHAIN and self.source_type != SourceType.OTHER:
+            pass
+
+        # check onchain sources
+        elif self.source_type == SourceType.ONCHAIN:
+            pass
+
+        # other sources are auto false
+        else:
+            self.correctness_score = 0.0
 
 class Source:
     """
@@ -48,6 +116,12 @@ class Source:
     def get_observed_since(self) -> datetime:
         return self.observed_since
 
+    def get_observations(self) -> list[Observation]:
+        return self.observations
+
+    def get_last_verified_idx(self) -> int:
+        return self.last_verified_idx
+
     def get_trusted_score(self) -> float:
         return self.trusted_score
 
@@ -57,59 +131,8 @@ class Source:
     def set_observed_since(self, observed_since: datetime):
         self.observed_since = observed_since
 
-class CheckedState(IntEnum):
-    """
-    State of an observation
-    """
+    def set_last_verified_idx(self, last_verified_idx: int):
+        self.last_verified_idx = last_verified_idx
 
-    # source has not been checked
-    UNCHECKED = 0
-    # source cannot be checked yet
-    CANNOT_CHECK_YET = 1
-    # source has been checked
-    CHECKED = 2
-
-class Observation:
-    """
-    Observation of a sentiment
-    """
-
-    def __init__(self, source_type: SourceType,  sentiment: Action, token_addr: str = None, price: float = None):
-        """
-        :param source_type: name of the source
-        :param sentiment: sentiment observed
-        :param token_addr: address of observed token; might not exist at time of observation
-        :param price: price of token at time of observation; might not exist at time of observation
-        """
-
-        # source type
-        self.source_type: SourceType = source_type
-        # sentiment observed at
-        self.observed_at: datetime = datetime.now()
-        # price at time of observation
-        self.price_at_observation_time: float = price
-        # the token the sentiment is about
-        self.token_addr: str = token_addr
-        # sentiment predicted by the source
-        self.predicted_sentiment: Action = sentiment
-        # whether sentiment has been checked
-        self.checked: CheckedState = CheckedState.UNCHECKED
-        # relative correctness score; 0.0 is incorrect, 1.0 is correct
-        self.correctness_score: float = 0.0
-
-    # checks the observation if it has not been checked
-    def verify(self):
-        if self.checked:
-            return
-
-        # check non-onchain and non-other sources
-        if self.source_type != SourceType.ONCHAIN and self.source_type != SourceType.OTHER:
-            pass
-
-        # check onchain sources
-        elif self.source_type == SourceType.ONCHAIN:
-            pass
-
-        # other sources are auto false
-        else:
-            self.correctness_score = 0.0
+    def set_trusted_score(self, trusted_score: float):
+        self.trusted_score = trusted_score
