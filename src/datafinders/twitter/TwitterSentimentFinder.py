@@ -1,13 +1,12 @@
 import twint
 import pandas as pd
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 
 from openai import OpenAI
 
 import concurrent.futures
 
-from src.datafinders.models import Sentiment
+from src.models import Sentiment, Observation, SourceType
 from src.datafinders.terms import CRYPTO_TERMS
 
 """
@@ -66,18 +65,18 @@ class TwitterSentimentFinder:
         self.reply_threshold = reply_threshold
         self.client = OpenAI()
 
-    def _get_user_tweets(self, user_id: int, since: int) -> pd.DataFrame:
+    def _get_user_tweets(self, user_id: int, last_observed: datetime) -> pd.DataFrame:
         """
         Get tweets from Twitter for a specific user
         :param user_id: Twitter username
-        :param since: Number of months to look back
+        :param last_observed: Date to look back to
         :return: pandas DataFrame containing tweets
         """
 
         # Configure twint
         c = twint.Config()
         c.User_id = user_id
-        c.Since = (datetime.now() - relativedelta(months=since)).strftime("%Y-%m-%d")
+        c.Since = last_observed.strftime("%Y-%m-%d")
         c.Limit = 100
         c.Search = "|".join(CRYPTO_TERMS)
         c.Pandas = True
@@ -115,23 +114,38 @@ class TwitterSentimentFinder:
 
     def _call_openai_for_sentiment(self, content: str, source: str, date: datetime) -> Sentiment:
         try:
-            prompt: str = "You are an AI model specialized in extracting information and analyzing the buying" + \
-                          "sentiment for cryptocurrencies from text. Your task is to identify the token mentioned," + \
-                          "its address if available, and the sentiment expressed towards buying or selling" + \
-                          "the token. The sentiment should be classified as 'BUY' or 'SELL'."
+            prompt: str = "You are an AI model specialized in extracting information and analyzing the buying" +\
+                          "sentiment for cryptocurrencies from tweets." +\
+                          "Your ask is to identify the mentioned token's name and address if available, as well as" +\
+                          "the sentiment. For the sentiment, 0 means buy and 1 means sell. If you encounter a date" +\
+                          "or point in time for when the sentiment is meant take note for when the date is meant" +\
+                          "The input will always be formatted like this:\n" +\
+                          "date\n-\ntext of tweet" +\
+                          "A couple examples for how you should act (the prompt should lead to the following values:" +\
+                          "Prompt:\n2023-10-03 14:30:00\n-\nDoge to the moon!\n" +\
+                          "Result: token: Doge, action: 0, when: 2023-10-03 14:30:00" +\
+                          "Prompt:\n2023-10-03 14:30:00\n-\nSol will crash in a month\n" +\
+                          "Result: token: Doge, action: 1, when: 2023-11-03 14:30:00" +\
+                          "Prompt:\n2023-10-03 14:30:00\n-\nThe erc has lost their battle with xrp\n" +\
+                          "Result: token: xrp, action: 0, when: 2023-10-03 14:30:00" +\
+                          "Prompt:\n2023-10-03 14:30:00\n-\ngot diamond hands for #Pepe\n" +\
+                          "Result: token: Pepe, action: 0, when: 2023-10-03 14:30:00"
             completion = self.client.beta.chat.completions.parse(
                 model="gpt-4o-2024-08-06",
                 messages=[
                     {"role": "system",
                      "content": prompt},
                     {"role": "user",
-                     "content": content},
+                     "content": f"{date}\n-\n{content}"},
                 ],
                 response_format=Sentiment,
             )
             res: Sentiment = completion.choices[0].message.parsed
             res.source = source
             res.date = date
+
+            if res.token is None or res.token == "":
+                raise Exception("Token not found in tweet")
 
             return res
         except Exception:
@@ -145,17 +159,22 @@ class TwitterSentimentFinder:
         :return: list of Sentiment objects
         """
 
-        with (concurrent.futures.ThreadPoolExecutor() as executor):
-            sentiments = list(executor.map(self._call_openai_for_sentiment, contents, users, dates))
+        if len(contents) == 1:
+            sentiments = [self._call_openai_for_sentiment(contents[0], users[0], dates[0])]
+        elif len(contents) > 1:
+            with (concurrent.futures.ThreadPoolExecutor() as executor):
+                sentiments = list(executor.map(self._call_openai_for_sentiment, contents, users, dates))
+        else:
+            sentiments = []
 
         return sentiments
 
-    def run(self, user_ids: list[int], since: int) -> list[Sentiment]:
+    def run(self, user_ids: list[int], since: int) -> list[Observation]:
         """
         Run the sentiment finder
         :param user_ids: List of Twitter user ids
         :param since: Number of months to look back
-        :return: list of TwitterSentiment objects
+        :return: list of Observation objects
         """
 
         tweets = self._get_users_tweets(user_ids, since)
@@ -165,21 +184,28 @@ class TwitterSentimentFinder:
             tweets["created_at"].to_list()
         )
 
-        return sentiments
+        observations: list[Observation] = []
+        for s in sentiments:
+            # TODO: fetch price at time of observation if possible
+            price: float = 0.0 # placeholder
+            obs: Observation = Observation(
+                s.date,
+                SourceType.TWITTER,
+                s.action,
+                s.token,
+                s.token_address,
+                price
+            )
+            observations.append(obs)
 
-    def run_single(self, user_id: int, since: int) -> list[Sentiment]:
+        return observations
+
+    def run_single(self, user_id: int, since: int) -> list[Observation]:
         """
         Run the sentiment finder for a single user
         :param user_id: Twitter user id
         :param since: Number of months to look back
-        :return: list of TwitterSentiment objects
+        :return: list of Observation objects
         """
 
-        tweets = self._get_user_tweets(user_id, since)
-        sentiments = self._get_sentiments(
-            tweets["tweet"].to_list(),
-            tweets["username"].to_list(),
-            tweets["created_at"].to_list()
-        )
-
-        return sentiments
+        return self.run([user_id], since)
