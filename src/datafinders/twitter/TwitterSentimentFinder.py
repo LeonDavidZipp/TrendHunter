@@ -99,16 +99,18 @@ class TwitterSentimentFinder:
 
         return df
 
-    def _get_users_tweets(self, user_ids: list[int], since: int) -> pd.DataFrame:
+    def _get_users_tweets(self, user_ids: list[int], last_observed: datetime) -> pd.DataFrame:
         """
         Get tweets from Twitter for a list of users
         :param user_ids: List of Twitter usernames
         :return: pandas DataFrame containing tweets
         """
-        # [...]
 
         # Get tweets for each user
-        dfs = [self._get_user_tweets(user_id, since) for user_id in user_ids]
+        # dfs = [self._get_user_tweets(user_id, last_observed) for user_id in user_ids]
+        l: list[datetime] = [last_observed] * len(user_ids)
+        with (concurrent.futures.ThreadPoolExecutor() as executor):
+            dfs: list[pd.DataFrame] = list(executor.map(self._get_user_tweets, user_ids, l))
 
         return pd.concat(dfs, sort=True, ignore_index=True, copy=False)
 
@@ -169,7 +171,30 @@ class TwitterSentimentFinder:
 
         return sentiments
 
-    def run(self, user_ids: list[int], since: int) -> list[Observation]:
+    @staticmethod
+    def _process_sentiment(s: Sentiment):
+        """
+        Process sentiment object
+        :param s: Sentiment object
+        :return: Observation object
+        """
+        # TODO: fetch token address if possible
+        if s.token_address is None:
+            s.token_address = ""  # placeholder
+        # TODO: fetch price at time of observation if possible
+        price = 0.0  # placeholder
+
+        return {
+            "date": s.date,
+            "source": s.source,
+            "source_type": SourceType.TWITTER,
+            "action": s.action,
+            "token": s.token,
+            "token_address": s.token_address,
+            "price": price
+        }
+
+    def run(self, user_ids: list[int], since: datetime) -> pd.DataFrame:
         """
         Run the sentiment finder
         :param user_ids: List of Twitter user ids
@@ -184,23 +209,12 @@ class TwitterSentimentFinder:
             tweets["created_at"].to_list()
         )
 
-        observations: list[Observation] = []
-        for s in sentiments:
-            # TODO: fetch price at time of observation if possible
-            price: float = 0.0 # placeholder
-            obs: Observation = Observation(
-                s.date,
-                SourceType.TWITTER,
-                s.action,
-                s.token,
-                s.token_address,
-                price
-            )
-            observations.append(obs)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            data = list(executor.map(self._process_sentiment, sentiments))
 
-        return observations
+        return pd.DataFrame(data)
 
-    def run_single(self, user_id: int, since: int) -> list[Observation]:
+    def run_single(self, user_id: int, since: datetime) -> pd.DataFrame:
         """
         Run the sentiment finder for a single user
         :param user_id: Twitter user id
