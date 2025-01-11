@@ -1,11 +1,11 @@
-from src.algorithms.models import Source, SourceType
-from src.datafinders.twitter.twitter import TwitterSentimentFinder
+from src.models import Source, SourceType
+from src.datafinders.SentimentFinder import SentimentFinder
 
 class TrendHunter:
     def __init__(
             self,
             wallets: list[str],
-            twitter_sentiment_finder: TwitterSentimentFinder
+            sentiment_finder: SentimentFinder
     ):
         # wallets to withdraw to
         self.wallets: list[str] = wallets
@@ -23,7 +23,7 @@ class TrendHunter:
         # sell all invest when initial invest halves
         self.sell_lower_bound = 0.5
         #twitter sentiment finder
-        self.twitter_sentiment_finder = twitter_sentiment_finder
+        self.sentiment_finder = sentiment_finder
 
     # ---------------------------------------------- #
     # Getters                                        #
