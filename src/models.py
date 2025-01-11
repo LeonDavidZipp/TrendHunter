@@ -47,6 +47,7 @@ class Sentiment(BaseModel):
     token: str = None
     token_address: str = None
     action: Action = None
+    when: datetime = None
     date: datetime = None
 
 class Observation:
@@ -120,8 +121,18 @@ class Source:
         self.observations: list[Observation] = []
         # last verified observation index
         self.last_verified_idx: int = -1
-        # >= 0.5 is trustworthy, < 0.5 is untrustworthy; trusted by default
-        self.trusted_score: float = 0.5
+        # >= 0.5 is trustworthy, < 0.5 is untrustworthy; combination of all score below
+        self.trusted_score: float = 0.0
+        # how impactful the source is
+        self.impact_score: float = 0.0
+        # how correct the source is
+        self.correctness_score: float = 0.0
+        # how intense correctly predicted changes were
+        self.correct_intensity_score: float = 0.0
+        # how intense wrongly predicted changes were
+        self.incorrect_intensity_score: float = 0.0
+        # how shortly changes follow
+
 
     # ---------------------------------------------- #
     # Getters                                        #
