@@ -10,8 +10,8 @@ import os
 import concurrent.futures
 
 class TwitterDataInteractor:
-    def __init__(self, db: str, user: str, password: str, host: str, port: int):
-        self.engine = create_engine(f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}')
+    def __init__(self, engine):
+        self.engine = engine
 
     def scrape_user_tweets(self, user_id: int, last_observed: datetime) -> None:
         """
@@ -104,8 +104,10 @@ if __name__ == "__main__":
     host = os.getenv("HOST")
     port = int(os.getenv("PORT"))
 
+    engine = create_engine(f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}')
+
     user_id = 1
     last_observed = datetime.now()
 
-    tdi = TwitterDataInteractor(db, user, password, host, port)
+    tdi = TwitterDataInteractor(engine)
     tdi.scrape_user_tweets(user_id, last_observed)
