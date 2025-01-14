@@ -32,3 +32,36 @@ CREATE TABLE IF NOT EXISTS "observations" (
 CREATE INDEX ON "observations" ("id");
 CREATE INDEX ON "observations" ("date");
 CREATE INDEX ON "observations" ("token");
+
+CREATE TABLE "tweets" (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ,
+    date TIMESTAMPTZ,
+    timezone VARCHAR,
+    tweet TEXT,
+    language VARCHAR,
+    hashtags TEXT[],
+    cashtags TEXT[],
+    user_id BIGINT,
+    user_id_str VARCHAR,
+    username VARCHAR,
+    name VARCHAR,
+    day INTEGER,
+    hour INTEGER,
+    retweet BOOLEAN,
+    nlikes INTEGER,
+    nreplies INTEGER,
+    nretweets INTEGER,
+    quote_url TEXT,
+    search TEXT,
+    near VARCHAR,
+    source VARCHAR,
+    user_rt_id BIGINT,
+    user_rt VARCHAR,
+    retweet_id BIGINT,
+    reply_to TEXT[],
+    retweet_date TIMESTAMPTZ,
+);
+
+CREATE INDEX ON "tweets" ("date");
+CREATE INDEX ON "tweets" ("id");
