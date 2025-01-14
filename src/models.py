@@ -47,7 +47,7 @@ class Sentiment(BaseModel):
     token: str = None
     token_address: str = None
     action: Action = None
-    when: datetime = None
+    predicted_date: datetime = None
     date: datetime = None
 
 class Observation:
@@ -123,15 +123,20 @@ class Source:
         self.last_verified_idx: int = -1
         # >= 0.5 is trustworthy, < 0.5 is untrustworthy; combination of all score below
         self.trusted_score: float = 0.0
-        # how impactful the source is
+        # how impactful the source is, calculated by size
         self.impact_score: float = 0.0
+        # how big the source is, e.g. nbr of twitter followers
+        self.size_score: float = 0.0
         # how correct the source is
         self.correctness_score: float = 0.0
+        # how incorrect the source is: 1 - correctness_score
+        self.incorrectness_score: float = 0.0
         # how intense correctly predicted changes were
         self.correct_intensity_score: float = 0.0
-        # how intense wrongly predicted changes were
+        # how intense adversely predicted changes were
         self.incorrect_intensity_score: float = 0.0
-        # how shortly changes follow
+        # how shortly changes follow the predicted change
+        self.immediateness_score: float = 0.0
 
 
     # ---------------------------------------------- #
