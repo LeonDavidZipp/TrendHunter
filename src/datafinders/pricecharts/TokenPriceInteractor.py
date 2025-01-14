@@ -76,8 +76,9 @@ class TokenPriceInteractor:
     def fetch_tokens_price_time_series(self, token_ids: list[int], time_start: datetime, time_end: datetime) -> None:
         """
         Collects token data and adds it to database
-        :param time_start:
-        :param time_end:
+        :param token_ids: List of token IDs
+        :param time_start: Start time for data collection
+        :param time_end: End time for data collection
         :return:
         """
 
@@ -87,9 +88,10 @@ class TokenPriceInteractor:
     def get_token_price_time_series(self, id: int) -> pd.DataFrame:
         """
         Get token price time series of a token
-        :param contract_hash:
+        :param id: id of token to get time series of
         :return:
         """
+
         querie = f"SELECT * FROM token_time_series WHERE id = {id}"
         return pd.read_sql(querie, con=self.engine)
 
@@ -98,5 +100,6 @@ class TokenPriceInteractor:
         Get all token price time series
         :return:
         """
+
         query = f"SELECT * FROM token_time_series"
         return pd.read_sql(query, con=self.engine)
