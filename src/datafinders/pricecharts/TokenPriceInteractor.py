@@ -54,8 +54,10 @@ class TokenPriceInteractor:
             for quote in quotes:
                 usd_quote = quote["quote"]["USD"]
                 data.append({
+                    "token_id": token_id,
                     "timestamp": quote["timestamp"],
                     "price": usd_quote["price"],
+                    "currency": "USD",
                     "volume_24h": usd_quote["volume_24h"],
                     "market_cap": usd_quote["market_cap"],
                     "circulating_supply": usd_quote["circulating_supply"],
