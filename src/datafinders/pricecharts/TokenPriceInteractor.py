@@ -1,11 +1,10 @@
 from sqlalchemy import create_engine
 
-import pandas as pd
-from datetime import datetime
-
-from src.datafinders.terms import CRYPTO_TERMS
-
 import os
+
+import pandas as pd
+from datetime import datetime, timedelta
+
 import concurrent.futures
 import requests
 
@@ -103,3 +102,20 @@ class TokenPriceInteractor:
 
         query = f"SELECT * FROM token_time_series"
         return pd.read_sql(query, con=self.engine)
+
+if __name__ == "__main__":
+    db = os.getenv("DB")
+    user = os.getenv("USER")
+    password = os.getenv("PASSWORD")
+    host = os.getenv("HOST")
+    port = int(os.getenv("PORT"))
+    api_key = os.getenv("CMC_API_KEY")
+
+    engine = create_engine(f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}')
+
+    token_id = 1
+    end = datetime.now()
+    start = end - timedelta(days=1)
+
+    tdi = TokenPriceInteractor(api_key, engine)
+    tdi.fetch_tokens_price_time_series()
